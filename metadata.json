@@ -1,0 +1,5 @@
+{
+  "name": "Medya Zorbalık Analizi",
+  "description": "AI-powered analysis tool to detect bullying, cultural pressure, and violence in media content using Gemini 2.5.",
+  "requestFramePermissions": []
+}
