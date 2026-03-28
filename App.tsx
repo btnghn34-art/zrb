@@ -10,6 +10,13 @@ import { AnalysisResult, SearchRecord, ContentType } from './types';
 // Constants
 const APP_ID = 'bullying-analyzer-v1';
 
+// Declare SCORM on window
+declare global {
+  interface Window {
+    Scorm: any;
+  }
+}
+
 const BullyingAnalyzer = () => {
   // State Definitions
   const [query, setQuery] = useState('');
@@ -19,6 +26,20 @@ const BullyingAnalyzer = () => {
   const [error, setError] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [recentSearches, setRecentSearches] = useState<SearchRecord[]>([]);
+
+  // 0. SCORM Initialization
+  useEffect(() => {
+    if (window.Scorm) {
+      window.Scorm.init();
+    }
+    
+    // Cleanup on unmount
+    return () => {
+      if (window.Scorm) {
+        window.Scorm.finish();
+      }
+    };
+  }, []);
 
   // 1. Automatic Anonymous Auth
   useEffect(() => {
@@ -77,8 +98,12 @@ const BullyingAnalyzer = () => {
   // ANALYSIS FUNCTION
   const analyzeContent = async () => {
     if (!query.trim()) return;
-    if (!process.env.API_KEY) {
-        setError("API Key eksik. Lütfen Vercel ortam değişkenlerini kontrol edin.");
+    
+    // Safely check for API key
+    const apiKey = typeof process !== 'undefined' ? process.env.API_KEY : undefined;
+
+    if (!apiKey) {
+        setError("API Key eksik. Lütfen Vercel ayarlarından 'API_KEY' değişkenini ekleyin.");
         return;
     }
 
@@ -87,7 +112,7 @@ const BullyingAnalyzer = () => {
     setResult(null);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI({ apiKey: apiKey });
 
       // 1. AI Analysis with Gemini SDK
       const prompt = `
@@ -131,6 +156,12 @@ const BullyingAnalyzer = () => {
       const parsedData: AnalysisResult = JSON.parse(textResponse);
       setResult(parsedData);
 
+      // SCORM COMPLETE TRIGGER
+      // Analiz başarılı olduğunda dersi tamamla
+      if (window.Scorm) {
+        window.Scorm.complete(100);
+      }
+
       // 2. Save result to Firestore (if configured)
       if (user && db) {
         await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'searches'), {
@@ -144,7 +175,7 @@ const BullyingAnalyzer = () => {
       }
 
     } catch (err: any) {
-      setError("Analiz sırasında bir hata oluştu veya içerik bulunamadı. Lütfen tekrar deneyin.");
+      setError("Analiz sırasında bir hata oluştu. Lütfen tekrar deneyin. (API Key veya Kota kontrolü yapınız)");
       console.error("Analysis Error:", err);
     } finally {
       setLoading(false);
